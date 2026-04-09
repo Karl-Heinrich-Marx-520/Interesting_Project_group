@@ -61,10 +61,19 @@ public:
 		if (is_shutdown_ && queue_.empty()) {
 			return false; // 队列已关闭且没有消息可消费
 		}
-
+		while (is_shutdown_ && !queue_.empty()) {
+			// 处理关闭状态下仍有未消费的消息
+			// 可以选择继续消费剩余消息，或者直接丢弃它们并退出
+			// 这里我们选择继续消费剩余消息，直到队列为空
+			// 注意：在关闭状态下，生产者线程不再添加新消息，因此队列中的消息数量是有限的，不会导致死锁
+			// 不过在实际应用中，可能需要根据具体需求来决定如何处理关闭状态下的剩余消息，例如丢弃它们或者记录日志等
+			// 也就是说，在关闭状态下，消费者线程会优先处理剩余消息，直到队列为空，然后才会退出。这种设计可以确保在关闭过程中不会丢失任何未消费的消息，同时也能优雅地退出消费者线程。
+			msg = queue_.front();
+			queue_.pop();
+		}
 		msg = queue_.front();
 		queue_.pop();
-		return true;
+		return true; // 成功消费到一条消息
 	}
 	void shutdown() {
 		std::lock_guard<std::mutex> lock(mutex_);
@@ -79,6 +88,12 @@ private:
 	bool is_shutdown_ = false;
 };
 
+enum class LogLevel {
+	DEBUG,
+	INFO,
+	WARNING,
+	ERROR
+};
 
 // Logger 类：日志记录器，负责将日志消息写入文件
 class Logger {
@@ -110,11 +125,27 @@ public:
 	}
 
 	template<typename... Args>
-	void log(const std::string& format, Args&&... args) {
-		log_queue_.push(formatMessage(format, std::forward<Args>(args)...));
+	void log(LogLevel level, const std::string& format, Args&&... args) {
+		std::string level_str;
+		switch (level) {
+		case LogLevel::DEBUG: level_str = "[DEBUG] "; break;
+		case LogLevel::INFO: level_str = "[INFO] "; break;
+		case LogLevel::WARNING: level_str = "[WARNING] "; break;
+		case LogLevel::ERROR: level_str = "[ERROR] "; break;
+			default: level_str = "[UNKNOWN] "; break;
+		}
+
+		log_queue_.push(level_str + formatMessage(format, std::forward<Args>(args)...));
 	}
 
 private:
+	std::string getCurrentTime() {
+		std::time_t now = std::time(nullptr);
+		char buf[20];
+		std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
+		return std::string(buf);
+	}
+
 	// 格式化日志消息，将格式字符串中的 {} 替换为对应的参数值
 	template<typename... Args>
 	std::string formatMessage(const std::string& format, Args&&... args) {
@@ -140,7 +171,7 @@ private:
 		while (arg_index < arg_strings.size()) {
 			oss << arg_strings[arg_index++];
 		}
-		return oss.str();
+		return "[" + getCurrentTime() + "]" + oss.str();
 	}
 	LogQueue log_queue_; // 线程安全的日志队列，支持多生产者和多消费者
 	std::thread worker_thread_; // 消费者线程，负责从日志队列中取出日志消息并写入文件
