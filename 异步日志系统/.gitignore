@@ -1,0 +1,49 @@
+# CMake 构建目录
+build/
+cmake-build-debug/
+cmake-build-release/
+
+# CMake 生成文件
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# 可执行程序
+ThreadLogger
+ThreadLogger.exe
+
+# 编译中间文件
+*.o
+*.obj
+*.pdb
+*.ilk
+*.exp
+
+# 库文件
+*.so
+*.so.*
+*.dll
+*.lib
+*.a
+*.dylib
+
+# 日志
+*.log
+logs/
+
+# IDE 配置
+.vs/
+.vscode/
+.idea/
+*.sln
+*.vcxproj
+*.vcxproj.filters
+*.suo
+
+# 系统文件
+.DS_Store
+Thumbs.db
+*.tmp
+*.swp
