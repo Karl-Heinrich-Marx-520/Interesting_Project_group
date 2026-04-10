@@ -169,19 +169,10 @@ AsyncLogger/
 │   └── test_logger.cpp
 ├── README.md
 └── CMakeLists.txt
+└── .gitignore
 ```
 
 ---
 
 ## 许可证
 本项目用于 **学习与教学**，可自由修改、使用、分享。
-
----
-
-如果你需要，我还能帮你生成：
-1. 配套 **CMakeLists.txt**
-2. 完整可编译运行的 **Logger 项目代码**
-3. 项目答辩 PPT 文案
-4. 课程报告/毕业设计文档模板
-
-需要我继续补充吗？
