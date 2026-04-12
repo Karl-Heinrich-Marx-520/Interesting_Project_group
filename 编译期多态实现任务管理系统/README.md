@@ -19,22 +19,22 @@
 ## 📁 项目结构
 ```
 TaskManager/
-├── include/        ✅ 【固定】头文件目录（仅 .h）
+├── include/
 │   ├── Logger.h
 │   ├── Task.h
 │   ├── TaskManager.h
 │   └── Command.h
-├── src/            ✅ 【行业标准】源文件目录（仅 .cpp）
+├── src/
 │   ├── Logger.cpp
 │   ├── TaskManager.cpp
 │   └── main.cpp
-├── log/            ✅ 【你要求】日志目录（自动生成 log.txt）
-├── resource/       ✅ 【你要求】资源目录（自动生成 tasks.txt）
+├── log.txt
+├── tasks.txt
 └── README.md
 ```
 
 ## 🧰 环境要求
-- 编译器：支持 **C++11 及以上** (GCC / Clang / MSVC)
+- 编译器：支持 **C++17 及以上** (GCC / Clang / MSVC)
 - 操作系统：Windows / macOS / Linux
 - 无第三方依赖，纯标准库实现
 
@@ -134,9 +134,6 @@ ID: 2, 描述: 购买日用品, 优先级: 2, 截止日期: 2025-04-20
 
 ## 📜 许可证
 本项目基于 **MIT License** 开源，可自由使用、修改、分发。
-
----
-**提示**：首次运行会自动生成 `tasks.txt` 和 `log.txt` 文件，无需手动创建~
 
 # 📊 代码架构与逻辑调用详解
 ## 0. 核心设计原则
