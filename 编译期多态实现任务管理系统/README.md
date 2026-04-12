@@ -19,14 +19,18 @@
 ## 📁 项目结构
 ```
 TaskManager/
-├── main.cpp                # 主程序：处理用户输入、命令调度
-├── Logger.h/Logger.cpp     # 单例日志系统
-├── Task.h                  # 任务结构体定义
-├── TaskManager.h/TaskManager.cpp # 任务核心管理逻辑
-├── Command.h               # CRTP 命令接口 + 具体命令实现
-├── tasks.txt               # 任务数据持久化文件（自动生成）
-├── log.txt                 # 操作日志文件（自动生成）
-└── README.md               # 项目说明文档
+├── include/        ✅ 【固定】头文件目录（仅 .h）
+│   ├── Logger.h
+│   ├── Task.h
+│   ├── TaskManager.h
+│   └── Command.h
+├── src/            ✅ 【行业标准】源文件目录（仅 .cpp）
+│   ├── Logger.cpp
+│   ├── TaskManager.cpp
+│   └── main.cpp
+├── log/            ✅ 【你要求】日志目录（自动生成 log.txt）
+├── resource/       ✅ 【你要求】资源目录（自动生成 tasks.txt）
+└── README.md
 ```
 
 ## 🧰 环境要求
