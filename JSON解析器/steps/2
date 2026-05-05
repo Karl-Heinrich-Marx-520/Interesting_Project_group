@@ -1,0 +1,341 @@
+## 阶段2：实现Lexer词法分析器（把字符串切成单词）
+### 本阶段目标
+写一个词法分析器，把一长串JSON字符串，切成一个个有意义的「Token」，解决「怎么把字符串拆成能解析的最小单元」的问题。
+
+### 核心原理
+#### 1. 什么是Token？
+Token就是JSON里的“最小有意义单元”，就像中文里的词语。比如JSON字符串`{"name":"张三", "age":20}`，拆成Token就是：
+`{`、`"name"`、`:`、`"张三"`、`,`、`"age"`、`:`、`20`、`}`
+
+#### 2. 我们需要哪些Token类型？
+把JSON里所有的最小单元都列出来，定义成枚举：
+| Token类型 | 含义 |
+|-----------|------|
+| EndOfInput | 字符串结束了 |
+| LeftBrace | 左大括号 `{` |
+| RightBrace | 右大括号 `}` |
+| LeftBracket | 左中括号 `[` |
+| RightBracket | 右中括号 `]` |
+| Colon | 冒号 `:` |
+| Comma | 逗号 `,` |
+| Null | 关键字 `null` |
+| True | 关键字 `true` |
+| False | 关键字 `false` |
+| Number | 数字，比如 `123`、`3.14` |
+| String | 字符串，比如 `"张三"` |
+
+#### 3. 词法分析器的工作流程
+1.  一个字符一个字符地遍历JSON字符串
+2.  跳过空格、换行、制表符这些无意义的空白字符
+3.  遇到不同的字符，生成对应的Token：
+    - 遇到`{`、`}`、`[`、`]`、`:`、`,`，直接生成对应的符号Token
+    - 遇到`"`，开始读取字符串，直到遇到下一个`"`，生成字符串Token
+    - 遇到`t`、`f`、`n`，读取关键字`true`/`false`/`null`，生成对应的Token
+    - 遇到数字或`-`，读取完整的数字，生成数字Token
+4.  遍历完所有字符，生成结束Token
+
+### 完整代码（带超详细注释）
+先在之前的代码基础上，添加Token的定义和Lexer类：
+```cpp
+// ===================== 先定义Token相关内容 =====================
+// Token类型枚举
+enum class TokenType {
+    EndOfInput,
+    LeftBrace,    // {
+    RightBrace,   // }
+    LeftBracket,  // [
+    RightBracket, // ]
+    Colon,        // :
+    Comma,        // ,
+    Null,         // null
+    True,         // true
+    False,        // false
+    Number,       // 数字
+    String        // 字符串
+};
+
+// Token结构体：每个Token都有类型、值、所在的行号列号（用来报错）
+struct Token {
+    TokenType type;    // Token的类型
+    std::string value; // Token的内容，比如字符串的内容、数字的文本
+    size_t line;       // 所在行号，解析失败时告诉用户哪里错了
+    size_t column;     // 所在列号
+
+    // 构造函数
+    Token(TokenType t, std::string v, size_t l, size_t c)
+        : type(t), value(std::move(v)), line(l), column(c) {}
+};
+
+// ===================== 词法分析器核心类 =====================
+class Lexer {
+private:
+    std::string m_input;  // 输入的JSON字符串
+    size_t m_pos;         // 当前遍历到的位置（下标）
+    size_t m_line;        // 当前行号
+    size_t m_column;      // 当前列号
+
+public:
+    // 构造函数：传入要解析的JSON字符串，初始化位置
+    Lexer(std::string input)
+        : m_input(std::move(input)), m_pos(0), m_line(1), m_column(1) {}
+
+    // 核心方法：把输入字符串切成Token列表，返回给调用者
+    std::vector<Token> tokenize() {
+        std::vector<Token> tokens; // 用来存生成的Token
+
+        // 循环遍历，直到字符串结束
+        while (!is_at_end()) {
+            skip_whitespace(); // 先跳过空白字符
+
+            if (is_at_end()) break; // 跳过空白后到结尾了，直接退出
+
+            char current_char = peek(); // 看一下当前的字符，不移动位置
+            size_t current_line = m_line;   // 记录当前行号
+            size_t current_column = m_column; // 记录当前列号
+
+            // 根据当前字符，生成对应的Token
+            switch (current_char) {
+                // 单字符符号，直接生成Token
+                case '{': advance(); tokens.emplace_back(TokenType::LeftBrace, "{", current_line, current_column); break;
+                case '}': advance(); tokens.emplace_back(TokenType::RightBrace, "}", current_line, current_column); break;
+                case '[': advance(); tokens.emplace_back(TokenType::LeftBracket, "[", current_line, current_column); break;
+                case ']': advance(); tokens.emplace_back(TokenType::RightBracket, "]", current_line, current_column); break;
+                case ':': advance(); tokens.emplace_back(TokenType::Colon, ":", current_line, current_column); break;
+                case ',': advance(); tokens.emplace_back(TokenType::Comma, ",", current_line, current_column); break;
+                // 遇到双引号，读取字符串
+                case '"': tokens.push_back(read_string()); break;
+                // 遇到关键字的开头，读取关键字
+                case 't': tokens.push_back(read_keyword("true", TokenType::True)); break;
+                case 'f': tokens.push_back(read_keyword("false", TokenType::False)); break;
+                case 'n': tokens.push_back(read_keyword("null", TokenType::Null)); break;
+                // 遇到数字或负号，读取数字
+                case '-': case '0': case '1': case '2': case '3':
+                case '4': case '5': case '6': case '7': case '8': case '9':
+                    tokens.push_back(read_number());
+                    break;
+                // 遇到不认识的字符，直接抛异常
+                default:
+                    throw std::runtime_error(
+                        "词法分析错误：行" + std::to_string(m_line) +
+                        "列" + std::to_string(m_column) +
+                        "，意外字符：'" + current_char + "'"
+                    );
+            }
+        }
+
+        // 最后加一个结束Token，告诉解析器字符串完了
+        tokens.emplace_back(TokenType::EndOfInput, "", m_line, m_column);
+        return tokens;
+    }
+
+private:
+    // ===================== 辅助工具函数 =====================
+    // 判断是否到了字符串结尾
+    bool is_at_end() const {
+        return m_pos >= m_input.size();
+    }
+
+    // 查看当前字符，不移动位置
+    char peek() const {
+        if (is_at_end()) return '\0';
+        return m_input[m_pos];
+    }
+
+    // 前进一个字符，更新行号列号
+    char advance() {
+        char c = m_input[m_pos++];
+        if (c == '\n') { // 遇到换行，行号+1，列号重置为1
+            m_line++;
+            m_column = 1;
+        } else { // 其他字符，列号+1
+            m_column++;
+        }
+        return c;
+    }
+
+    // 跳过空白字符：空格、换行、制表符、回车
+    void skip_whitespace() {
+        while (!is_at_end()) {
+            char c = peek();
+            if (isspace(c)) { // isspace是C++标准函数，判断是否是空白字符
+                advance();
+            } else {
+                break;
+            }
+        }
+    }
+
+    // ===================== 核心读取函数 =====================
+    // 读取关键字：true/false/null
+    Token read_keyword(const std::string& keyword, TokenType type) {
+        size_t start_line = m_line;
+        size_t start_column = m_column;
+
+        // 逐个字符匹配关键字
+        for (char c : keyword) {
+            if (advance() != c) {
+                throw std::runtime_error(
+                    "词法分析错误：行" + std::to_string(start_line) +
+                    "列" + std::to_string(start_column) +
+                    "，无效的关键字，期望：" + keyword
+                );
+            }
+        }
+
+        // 匹配成功，返回对应的Token
+        return Token(type, keyword, start_line, start_column);
+    }
+
+    // 读取字符串：从开头的"读到结尾的"，处理转义字符
+    Token read_string() {
+        size_t start_line = m_line;
+        size_t start_column = m_column;
+        advance(); // 跳过开头的双引号 "
+        std::string result; // 用来存字符串的内容
+
+        // 循环读取，直到遇到结尾的双引号
+        while (!is_at_end() && peek() != '"') {
+            char c = advance();
+            // 处理转义字符：比如 \" 、\n 、\t 等
+            if (c == '\\') {
+                if (is_at_end()) {
+                    throw std::runtime_error(
+                        "词法分析错误：行" + std::to_string(start_line) +
+                        "列" + std::to_string(start_column) +
+                        "，字符串未闭合，意外的转义结尾"
+                    );
+                }
+                char esc_char = advance(); // 读取转义符后面的字符
+                // 根据转义字符，替换成对应的内容
+                switch (esc_char) {
+                    case '"':  result += '"'; break;
+                    case '\\': result += '\\'; break;
+                    case '/':  result += '/'; break;
+                    case 'b':  result += '\b'; break;
+                    case 'f':  result += '\f'; break;
+                    case 'n':  result += '\n'; break;
+                    case 'r':  result += '\r'; break;
+                    case 't':  result += '\t'; break;
+                    default:
+                        throw std::runtime_error(
+                            "词法分析错误：行" + std::to_string(m_line) +
+                            "列" + std::to_string(m_column) +
+                            "，不支持的转义字符：\\" + esc_char
+                        );
+                }
+            } else {
+                // 普通字符，直接加进去
+                result += c;
+            }
+        }
+
+        // 循环结束了，还没到结尾的"，说明字符串没闭合
+        if (is_at_end()) {
+            throw std::runtime_error(
+                "词法分析错误：行" + std::to_string(start_line) +
+                "列" + std::to_string(start_column) +
+                "，字符串未闭合，缺少结尾的\""
+            );
+        }
+
+        advance(); // 跳过结尾的双引号 "
+        return Token(TokenType::String, result, start_line, start_column);
+    }
+
+    // 读取数字：支持整数、浮点数
+    Token read_number() {
+        size_t start_line = m_line;
+        size_t start_column = m_column;
+        size_t start_pos = m_pos; // 记录数字开始的位置
+
+        // 处理负号
+        if (peek() == '-') advance();
+
+        // 处理整数部分
+        if (peek() == '0') {
+            advance();
+            // 0后面不能跟其他数字，比如 0123 是非法的JSON数字
+            if (isdigit(peek())) {
+                throw std::runtime_error(
+                    "词法分析错误：行" + std::to_string(start_line) +
+                    "列" + std::to_string(start_column) +
+                    "，数字不能以0开头后跟其他数字"
+                );
+            }
+        } else {
+            // 读取所有连续的数字
+            while (isdigit(peek())) advance();
+        }
+
+        // 处理小数部分：比如 .14
+        if (peek() == '.') {
+            advance();
+            // 小数点后面必须跟数字
+            if (!isdigit(peek())) {
+                throw std::runtime_error(
+                    "词法分析错误：行" + std::to_string(m_line) +
+                    "列" + std::to_string(m_column) +
+                    "，小数点后必须跟数字"
+                );
+            }
+            while (isdigit(peek())) advance();
+        }
+
+        // 截取数字的文本内容
+        std::string num_str = m_input.substr(start_pos, m_pos - start_pos);
+        return Token(TokenType::Number, num_str, start_line, start_column);
+    }
+};
+```
+
+### 逐模块讲解
+1.  **Token结构体**：每个Token都包含「类型、内容、行号、列号」，类型用来告诉解析器这是什么东西，内容是它的值，行号列号用来报错，符合题目要求的「解析失败时提供有意义的错误信息」。
+2.  **Lexer的核心成员**：`m_input`是输入的JSON字符串，`m_pos`是当前遍历的下标，`m_line`和`m_column`记录当前位置，用来报错。
+3.  **辅助工具函数**：
+    - `is_at_end()`：判断是否遍历完了字符串
+    - `peek()`：查看当前字符，不移动位置，避免提前消费字符
+    - `advance()`：前进一个字符，同时更新行号列号
+    - `skip_whitespace()`：跳过所有空白字符，JSON里的空白不影响语义
+4.  **核心读取函数**：
+    - `read_keyword()`：匹配`true`/`false`/`null`，确保关键字拼写正确
+    - `read_string()`：读取字符串，处理转义字符，确保字符串有闭合的双引号
+    - `read_number()`：读取数字，符合JSON的数字规范，比如不能有`0123`这种前导零的数字
+5.  **核心`tokenize()`方法**：循环遍历字符串，逐个生成Token，最后返回Token列表，这是Lexer对外的唯一接口。
+
+### 测试一下这个阶段的代码
+在main函数里添加测试代码，看看能不能正确切分Token：
+```cpp
+int main() {
+    // 测试JSON字符串
+    std::string json_str = R"(
+        {
+            "name": "张三",
+            "age": 20,
+            "is_student": true,
+            "score": [90.5, 88, 95],
+            "null_value": null
+        }
+    )";
+
+    try {
+        // 创建词法分析器，生成Token列表
+        Lexer lexer(json_str);
+        std::vector<Token> tokens = lexer.tokenize();
+
+        // 打印所有Token
+        std::cout << "===== 生成的Token列表 =====" << std::endl;
+        for (const auto& token : tokens) {
+            std::cout << "行" << token.line << "列" << token.column 
+                      << " | 类型：" << static_cast<int>(token.type)
+                      << " | 内容：" << token.value << std::endl;
+        }
+    } catch (const std::exception& e) {
+        std::cerr << "错误：" << e.what() << std::endl;
+    }
+
+    return 0;
+}
+```
+编译运行后，能看到所有字符都被切成了正确的Token，就说明这个阶段完成了！
+
+---
