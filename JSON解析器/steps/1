@@ -1,0 +1,182 @@
+## 阶段1：先做JsonValue数据结构（装数据的盒子）
+### 本阶段目标
+定义一个能装下JSON 6种类型的C++类，解决「解析完的东西存在哪」的问题。
+
+### 核心原理
+C++里要让一个变量能存多种类型，最适合的就是**C++17的`std::variant`**（类型安全的联合体，你可以理解成一个“万能盒子”，同一时间只能装一种类型，但能随时切换，还能知道当前装的是什么）。
+
+我们给6种JSON类型，对应C++的类型：
+| JSON类型 | 对应的C++类型 | 说明 |
+|----------|---------------|------|
+| null     | `std::monostate` | 空类型，什么都不存，专门用来表示null |
+| boolean  | `bool` | 直接对应C++的bool |
+| number   | `double` | 同时存整数和浮点数，兼容所有JSON数字 |
+| string   | `std::string` | 直接对应C++字符串 |
+| array    | `std::vector<JsonValue>` | 数组，里面可以放任意JsonValue |
+| object   | `std::map<std::string, JsonValue>` | 对象，键是字符串，值是任意JsonValue |
+
+### 完整代码（带超详细注释）
+```cpp
+#include <iostream>
+#include <string>
+#include <variant>  // 万能盒子的核心头文件
+#include <vector>
+#include <map>
+#include <stdexcept> // 用来抛异常
+
+// 先做类型别名，简化代码
+class JsonValue; // 前置声明，因为数组和对象要用到JsonValue本身
+using JsonArray = std::vector<JsonValue>;  // JSON数组 = 装JsonValue的vector
+using JsonObject = std::map<std::string, JsonValue>; // JSON对象 = 字符串到JsonValue的map
+
+// 核心类：用来存JSON的任意类型数据
+class JsonValue {
+private:
+    // 核心成员：万能盒子，能存6种类型中的一种
+    std::variant<
+        std::monostate,  // 对应null
+        bool,             // 对应boolean
+        double,           // 对应number
+        std::string,      // 对应string
+        JsonArray,        // 对应array
+        JsonObject        // 对应object
+    > m_value;
+
+public:
+    // ===================== 构造函数：给每种类型提供初始化方式 =====================
+    // 空构造函数，默认是null
+    JsonValue() : m_value(std::monostate{}) {}
+    // 专门给null用的构造函数，比如 JsonValue v = nullptr;
+    JsonValue(std::nullptr_t) : m_value(std::monostate{}) {}
+    // 布尔值构造
+    JsonValue(bool value) : m_value(value) {}
+    // 数字构造：整数转成double，统一存储
+    JsonValue(int value) : m_value(static_cast<double>(value)) {}
+    JsonValue(double value) : m_value(value) {}
+    // 字符串构造
+    JsonValue(const char* value) : m_value(std::string(value)) {}
+    JsonValue(const std::string& value) : m_value(value) {}
+    // 数组和对象构造
+    JsonValue(const JsonArray& value) : m_value(value) {}
+    JsonValue(const JsonObject& value) : m_value(value) {}
+
+    // ===================== 类型判断接口：判断当前存的是什么类型 =====================
+    // 比如 if (json.is_null()) 就能知道是不是null
+    bool is_null()    const { return std::holds_alternative<std::monostate>(m_value); }
+    bool is_bool()    const { return std::holds_alternative<bool>(m_value); }
+    bool is_number()  const { return std::holds_alternative<double>(m_value); }
+    bool is_string()  const { return std::holds_alternative<std::string>(m_value); }
+    bool is_array()   const { return std::holds_alternative<JsonArray>(m_value); }
+    bool is_object()  const { return std::holds_alternative<JsonObject>(m_value); }
+
+    // ===================== 类型转换接口：把盒子里的东西取出来 =====================
+    // 比如 json.as_string() 就能拿到里面的字符串，类型不对会抛异常，防止用错
+    bool as_bool() const {
+        if (!is_bool()) throw std::runtime_error("当前值不是bool类型，无法转换");
+        return std::get<bool>(m_value); // std::get 从variant里取出对应类型的值
+    }
+
+    double as_number() const {
+        if (!is_number()) throw std::runtime_error("当前值不是number类型，无法转换");
+        return std::get<double>(m_value);
+    }
+
+    const std::string& as_string() const {
+        if (!is_string()) throw std::runtime_error("当前值不是string类型，无法转换");
+        return std::get<std::string>(m_value);
+    }
+
+    const JsonArray& as_array() const {
+        if (!is_array()) throw std::runtime_error("当前值不是array类型，无法转换");
+        return std::get<JsonArray>(m_value);
+    }
+
+    const JsonObject& as_object() const {
+        if (!is_object()) throw std::runtime_error("当前值不是object类型，无法转换");
+        return std::get<JsonObject>(m_value);
+    }
+
+    // 给可修改的版本，方便后续赋值
+    JsonArray& as_array() {
+        if (!is_array()) throw std::runtime_error("当前值不是array类型，无法转换");
+        return std::get<JsonArray>(m_value);
+    }
+
+    JsonObject& as_object() {
+        if (!is_object()) throw std::runtime_error("当前值不是object类型，无法转换");
+        return std::get<JsonObject>(m_value);
+    }
+
+    // ===================== 友好的访问API：重载[]运算符，像数组/字典一样取值 =====================
+    // 数组用下标取值：json[0]
+    JsonValue& operator[](size_t index) {
+        return as_array()[index];
+    }
+    const JsonValue& operator[](size_t index) const {
+        return as_array()[index];
+    }
+
+    // 对象用键取值：json["name"]
+    JsonValue& operator[](const std::string& key) {
+        return as_object()[key];
+    }
+    const JsonValue& operator[](const std::string& key) const {
+        return as_object().at(key);
+    }
+
+    // 辅助函数：获取数组/对象的大小
+    size_t size() const {
+        if (is_array()) return as_array().size();
+        if (is_object()) return as_object().size();
+        throw std::runtime_error("只有数组和对象才能获取size");
+    }
+};
+```
+
+### 逐模块讲解
+1.  **前置类型别名**：`JsonArray`和`JsonObject`提前定义，因为数组和对象里可以嵌套任意JSON类型，包括数组和对象本身，所以必须前置声明`JsonValue`。
+2.  **核心成员`m_value`**：这是整个类的心脏，`std::variant`把6种类型都包起来，保证了类型安全，不会出现C语言联合体的类型混乱问题。
+3.  **构造函数**：给每种JSON类型都提供了对应的构造方式，你可以直接写`JsonValue v = 123;`、`JsonValue s = "hello";`，非常自然。
+4.  **类型判断接口**：`is_xxx()`系列函数，用`std::holds_alternative`判断当前variant里存的是什么类型，防止你取错类型。
+5.  **类型转换接口**：`as_xxx()`系列函数，用`std::get`取出variant里的值，如果类型不对直接抛异常，避免程序出现未定义行为。
+6.  **`[]`运算符重载**：这是题目要求的「友好的数据访问API」，让你能像JS/Python一样，直接用下标和键取值，不用写复杂的函数调用。
+
+### 测试一下这个阶段的代码
+你可以直接在main函数里测试，验证我们的盒子能不能正常用：
+```cpp
+int main() {
+    // 测试1：基础类型
+    JsonValue null_val = nullptr;
+    JsonValue bool_val = true;
+    JsonValue num_val = 3.14;
+    JsonValue str_val = "hello json";
+
+    std::cout << "null是否为空：" << std::boolalpha << null_val.is_null() << std::endl;
+    std::cout << "布尔值：" << bool_val.as_bool() << std::endl;
+    std::cout << "数字：" << num_val.as_number() << std::endl;
+    std::cout << "字符串：" << str_val.as_string() << std::endl;
+
+    // 测试2：数组
+    JsonArray arr = {1, 2, "abc", false};
+    JsonValue arr_val = arr;
+    std::cout << "数组长度：" << arr_val.size() << std::endl;
+    std::cout << "数组第0个元素：" << arr_val[0].as_number() << std::endl;
+
+    // 测试3：对象
+    JsonObject obj;
+    obj["name"] = "张三";
+    obj["age"] = 20;
+    JsonValue obj_val = obj;
+    std::cout << "姓名：" << obj_val["name"].as_string() << std::endl;
+    std::cout << "年龄：" << obj_val["age"].as_number() << std::endl;
+
+    return 0;
+}
+```
+编译命令（必须支持C++17）：
+```bash
+g++ -std=c++17 json_value.cpp -o json_value
+```
+能正常运行并输出对应的值，就说明这个阶段完成了！
+
+---
