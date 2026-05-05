@@ -14,4 +14,4 @@ Every interesting project I generated are all placed in this repository，which 
 map，vector
 
 ## JSON解析器
-JsonValue模块，Lexer词法分析模块，Parser语法分析模块，API与进阶功能。
+JsonValue模块，Lexer词法分析模块，Parser语法分析模块，API与进阶功能(序列化，迭代器，文件读取，注释)
