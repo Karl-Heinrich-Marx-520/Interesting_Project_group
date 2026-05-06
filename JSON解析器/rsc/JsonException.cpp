@@ -519,7 +519,7 @@ private:
 	size_t m_pos; // 当前解析位置
 
 public:
-	Parser(std::vector<Token> tokens) : m_tokens(std::move(tokens)), m_pos(0) {}
+	Parser(std::vector<Token>& tokens) : m_tokens(tokens), m_pos(0) {}
 
 	// 解析入口函数，解析整个JSON文本，返回一个JsonValue
 	JsonValue parse() {
