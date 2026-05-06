@@ -44,7 +44,7 @@ public:
 	// 数组和对象类型
 	JsonValue(const JsonArray& arr) : m_value(arr) {}
 	JsonValue(const JsonObject& obj) : m_value(obj) {}
-	// 右值引用 移动构造 （新增）
+	// 右值引用 移动构造（AI没写，需要补充）
 	JsonValue(std::string&& value) : m_value(std::move(value)) {}
 	JsonValue(JsonArray&& value)   : m_value(std::move(value)) {}
 	JsonValue(JsonObject&& value)  : m_value(std::move(value)) {}
@@ -275,6 +275,7 @@ private:
 
 public:
 	Lexer(const std::string& input) : m_input(input), m_pos(0), m_line(1), m_column(1) {}
+	Lexer(const std::string&& input) : m_input(std::move(input)), m_pos(0), m_line(1), m_column(1) {}
 
 	std::vector<Token> tokenize() {
 		std::vector<Token> tokens; // 存储生成的 Token
@@ -520,6 +521,7 @@ private:
 
 public:
 	Parser(std::vector<Token>& tokens) : m_tokens(tokens), m_pos(0) {}
+	Parser(std::vector<Token>&& tokens) : m_tokens(std::move(tokens)), m_pos(0) {}
 
 	// 解析入口函数，解析整个JSON文本，返回一个JsonValue
 	JsonValue parse() {
