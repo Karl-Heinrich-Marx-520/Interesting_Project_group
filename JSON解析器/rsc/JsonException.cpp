@@ -3,6 +3,8 @@
 #include <variant> // C++17 引入的 std::variant 用于存储不同类型的值
 #include <vector>
 #include <map>
+#include <string_view> //做一些优化，节省两次深拷贝，数据量几兆时可以显著提高性能
+#include <span> // vector的视图，名字有点怪
 #include <fstream>
 #include <sstream>
 #include <ostream>
