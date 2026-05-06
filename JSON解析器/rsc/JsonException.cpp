@@ -521,25 +521,19 @@ private:
 // ===================== 语法分析器Parser核心类 =====================
 class Parser {
 private:
-	std::vector<Token> m_tokens; // 词法分析器生成的Token列表
-	size_t m_pos; // 当前解析位置
+    std::span<const Token> m_tokens;
+    std::vector<Token> m_own_tokens;
+    size_t m_pos; // 当前解析到的Token下标
 
 public:
-	Parser(std::vector<Token>& tokens) : m_tokens(tokens), m_pos(0) {}
-	Parser(std::vector<Token>&& tokens) : m_tokens(std::move(tokens)), m_pos(0) {}
+    explicit Parser(std::span<const Token> tokens) noexcept
+        : m_tokens(tokens), m_pos(0) {}
 
-	// 解析入口函数，解析整个JSON文本，返回一个JsonValue
-	JsonValue parse() {
-		JsonValue root = parse_value(); // 从第一个值开始解析
-		if(peek().type != TokenType::EndOfInput){
-			throw std::runtime_error(
-				"语法分析错误：行" + std::to_string(peek().line) +
-				"列" + std::to_string(peek().column) +
-				"，在JSON文本末尾发现多余的内容"
-			);
-		}
-		return root;
-	}
+    // 右值vector：移动到内部持有，再绑定视图
+    explicit Parser(std::vector<Token>&& tokens) noexcept
+        : m_own_tokens(std::move(tokens)), 
+          m_tokens(m_own_tokens), // 视图指向自己持有的数据
+          m_pos(0) {}
 
 	// 静态辅助方法：一步到位，直接从字符串解析出JsonValue
 	static JsonValue parse(const std::string& json_str) {
@@ -560,10 +554,8 @@ public:
 		return parse(oss.str()); // 调用parse方法解析
 	}
 
-
-private:
 //---------------------------辅助工具函数-----------------------------
-
+private:
 	const Token& peek() const {
 		if (m_pos >= m_tokens.size()) {
 			throw std::runtime_error("语法分析错误：意外的输入结尾");
