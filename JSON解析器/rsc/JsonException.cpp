@@ -536,11 +536,8 @@ public:
           m_pos(0) {}
 
 	// 静态辅助方法：一步到位，直接从字符串解析出JsonValue
-	static JsonValue parse(const std::string& json_str) {
-		Lexer lexer(json_str);
-		auto tokens = lexer.tokenize();
-		Parser parser(tokens);
-		return parser.parse();
+	static JsonValue parse(const std::string& json_str) { 
+    	return Parser(Lexer(json_str).tokenize()).parse(); 
 	}
 
 	// 从文件读取JSON并解析
