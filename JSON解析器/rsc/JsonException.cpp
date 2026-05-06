@@ -270,14 +270,17 @@ struct Token {
 // ============================= 词法分析器Lexer核心类 =========================================
 class Lexer {
 private:
-	std::string m_input; // 输入的 JSON 字符串
+	std::string_view m_input; // 输入的 JSON 字符串
+	std::string m_own_input; //右值输入
 	size_t m_pos;        // 当前解析位置
 	size_t m_line;       // 当前行号
 	size_t m_column;     // 当前列号
 
 public:
-	Lexer(const std::string& input) : m_input(input), m_pos(0), m_line(1), m_column(1) {}
-	Lexer(const std::string&& input) : m_input(std::move(input)), m_pos(0), m_line(1), m_column(1) {}
+	explicit Lexer(std::string_view input) : m_input(input), m_pos(0), m_line(1), m_column(1) {}
+    explicit Lexer(std::string&& input) ：m_own_input(std::move(input)), m_input(m_own_input),
+		m_pos(0), m_line(1), m_column(1) {}
+	
 
 	std::vector<Token> tokenize() {
 		std::vector<Token> tokens; // 存储生成的 Token
