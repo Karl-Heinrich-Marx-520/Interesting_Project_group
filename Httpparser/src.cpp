@@ -128,7 +128,7 @@ ParseState HttpParser::ParseRequestLine(const char* begin, const char* end) {
 
     m_current_request.version.assign(space2 + 1, crlf);
     if (m_current_request.version != "HTTP/1.1" 
-        && m_current_request.version != "HTTP/1.0") {
+        || m_current_request.version != "HTTP/1.0") {
         return ParseState::kParseError;
     }
 
